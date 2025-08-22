@@ -137,8 +137,8 @@ export default function Page() {
   const setSize = (name: string, rows: number, cols: number) => {
     setMatrices(prev => prev.map(m => {
       if (m.name !== name) return m;
-      const r = Math.max(1, Math.min(8, Math.floor(rows)));
-      const c = Math.max(1, Math.min(8, Math.floor(cols)));
+      const r = Math.max(1, Math.floor(rows)); // Remove the 8 limit
+      const c = Math.max(1, Math.floor(cols)); // Remove the 8 limit
       const data: string[][] = Array.from({ length: r }, (_, i) => (
         Array.from({ length: c }, (_, j) => (m.data[i]?.[j] ?? ''))
       ));
