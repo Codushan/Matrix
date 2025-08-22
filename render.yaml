@@ -1,0 +1,30 @@
+services:
+  # Backend (FastAPI)
+  - type: web
+    name: matrix-backend
+    env: python
+    buildCommand: pip install -r server/requirements.txt
+    startCommand: uvicorn server.main:app --host 0.0.0.0 --port $PORT
+    runtime: python
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+    plan: free
+    autoDeploy: true
+
+  # Frontend (Next.js)
+  - type: web
+    name: matrix-frontend
+    env: node
+    rootDir: web
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+    plan: free
+    autoDeploy: true
+    routes:
+      - type: rewrite
+        source: /api/(.*)
+        destination: https://matrix-backend.onrender.com/$1
