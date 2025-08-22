@@ -269,7 +269,7 @@ export default function Page() {
             ))}
           </div>
           <div className="grid grid-cols-3 gap-2 mt-2">
-            <button className="bg-green-600 text-white rounded px-3 py-2 font-semibold" onClick={evaluate}>Calculate (=)</button>
+            <button className="bg-green-600 text-white rounded px-3 py-2 font-semibold" onClick={evaluate}>Calculate</button>
             <button className="bg-[#007aff] text-white rounded px-3 py-2 font-semibold" onClick={storeResult}>Store Result</button>
             <button className="bg-red-600 text-white rounded px-3 py-2 font-semibold" onClick={() => { setExpr(''); setResult(null); setError(null); }}>Clear</button>
           </div>
