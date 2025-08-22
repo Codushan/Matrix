@@ -175,7 +175,7 @@ export default function Page() {
     setError(null);
     setResult(null);
     try {
-             const res = await fetch(`${process.env.API_URL || 'http://localhost:8000/'}evaluate`, {
+             const res = await fetch(`${process.env.API_URL || 'http://localhost:8000'}/evaluate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ matrices, expression: expr })
