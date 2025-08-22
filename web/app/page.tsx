@@ -215,9 +215,9 @@ export default function Page() {
           <div className="space-y-3">
             {matrices.map(m => (
               <div key={m.name} className="border rounded p-2">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-wrap items-center justify-between mb-2 gap-2">
                   <div className="font-semibold">Matrix {m.name}</div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span>Rows:</span>
                     <input
                       type="number"
@@ -266,15 +266,32 @@ export default function Page() {
                         });
                       }}
                     />
-                    <button className="bg-red-100 text-red-700 px-2 py-1 rounded" onClick={() => removeMatrix(m.name)}>×</button>
+                    <button
+                      className="bg-red-100 text-red-700 px-2 py-1 rounded mt-2 md:mt-0"
+                      style={{ minWidth: 32 }}
+                      onClick={() => removeMatrix(m.name)}
+                    >×</button>
                   </div>
                 </div>
-                <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${m.cols}, minmax(60px, 1fr))` }}>
-                  {Array.from({ length: m.rows }).map((_, r) => (
-                    Array.from({ length: m.cols }).map((_, c) => (
-                      <input key={`${r}-${c}`} className="border rounded px-2 py-1" value={m.data[r]?.[c] ?? ''} onChange={e => setCell(m.name, r, c, e.target.value)} />
-                    ))
-                  ))}
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                  <div
+                    className="grid gap-1"
+                    style={{
+                      gridTemplateColumns: `repeat(${m.cols}, minmax(60px, 1fr))`,
+                      minWidth: `${m.cols * 70}px`, // ensures horizontal scroll if too many columns
+                    }}
+                  >
+                    {Array.from({ length: m.rows }).map((_, r) =>
+                      Array.from({ length: m.cols }).map((_, c) => (
+                        <input
+                          key={`${r}-${c}`}
+                          className="border rounded px-2 py-1"
+                          value={m.data[r]?.[c] ?? ''}
+                          onChange={e => setCell(m.name, r, c, e.target.value)}
+                        />
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -291,7 +308,6 @@ export default function Page() {
             {varButtons.map(v => (
               <button key={v} className="bg-[#4ca1af] text-white rounded px-2 py-1" onClick={() => insertToken(v)}>{v}</button>
             ))}
-            {/* Number and fraction buttons */}
             {[1,2,3,4,5,6,7,8,9,0].map(n => (
               <button key={n} className="bg-gray-200 text-gray-800 rounded px-2 py-1" onClick={() => insertToken(String(n))}>{n}</button>
             ))}
@@ -315,30 +331,56 @@ export default function Page() {
               <button key={label} className="bg-[#2c3e50] text-white rounded px-2 py-2" onClick={() => insertToken(tok as string)}>{label}</button>
             ))}
           </div>
-          <div className="grid grid-cols-3 gap-2 mt-2">
+          <div className="grid grid-cols-4 gap-2 mt-2">
             <button className="bg-green-600 text-white rounded px-3 py-2 font-semibold" onClick={evaluate}>Calculate</button>
             <button className="bg-[#007aff] text-white rounded px-3 py-2 font-semibold" onClick={storeResult}>Store Result</button>
             <button className="bg-red-600 text-white rounded px-3 py-2 font-semibold" onClick={() => { setExpr(''); setResult(null); setError(null); }}>Clear</button>
+            <button
+              className="bg-purple-900 text-white rounded px-3 py-2 font-semibold"
+              onClick={() => setExpr(s => s.slice(0, -1))}
+              aria-label="Backspace"
+              title="Backspace"
+            >
+              ⌫
+            </button>
           </div>
 
           <div className="font-semibold mt-3 mb-1">Result</div>
           <div className="min-h-[140px] border rounded p-2 bg-slate-50 overflow-auto">
             {error && (<pre className="text-red-700 whitespace-pre-wrap">Error: {error}</pre>)}
-                         {!error && result?.kind === 'scalar' && (
-               <div><strong>Scalar:</strong> {renderMathExpr(String(result.value))}</div>
-             )}
+            {!error && result?.kind === 'scalar' && (
+              <div><strong>Scalar:</strong> {renderMathExpr(String(result.value))}</div>
+            )}
             {!error && result?.kind === 'matrix' && Array.isArray(result.value) && (
-              <table className="border-collapse">
-                <tbody>
-                  {(result.value as string[][]).map((row, i) => (
-                    <tr key={i}>
-                      {row.map((cell, j) => (
-                        <td key={j} className="border px-2 py-1 text-center">{renderMathExpr(cell)}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div style={{ overflowX: 'auto', width: '100%' }}>
+                <table className="border-collapse" style={{ minWidth: '100%', tableLayout: 'auto' }}>
+                  <tbody>
+                    {(result.value as string[][]).map((row, i) => (
+                      <tr
+                        key={i}
+                        className={i % 2 === 1 ? 'bg-[#e6d3c2]' : ''}
+                      >
+                        {row.map((cell, j) => (
+                          <td
+                            key={j}
+                            className="border px-1 py-1 text-center align-top"
+                            style={{
+                              minWidth: 60,
+                              maxWidth: 120,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                            title={cell}
+                          >
+                            {renderMathExpr(cell)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </section>
