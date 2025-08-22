@@ -9,7 +9,7 @@ type EvalResponse = { kind: 'matrix' | 'scalar'; value: string | string[][] };
 export default function Page() {
   const [matrices, setMatrices] = useState<Matrix[]>([
     { name: 'A', rows: 2, cols: 2, data: [['a', '0'], ['0', 'a']] },
-    { name: 'B', rows: 2, cols: 2, data: [['a', 'a'], ['0', '0']] },
+    { name: 'B', rows: 2, cols: 2, data: [['1', 'a'], ['3', '0']] },
   ]);
   const [expr, setExpr] = useState(''); // was: useState(null as string | null);
   const [result, setResult] = useState<EvalResponse | null>(null);
