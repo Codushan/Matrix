@@ -11,7 +11,7 @@ export default function Page() {
     { name: 'A', rows: 2, cols: 2, data: [['a', '0'], ['0', 'a']] },
     { name: 'B', rows: 2, cols: 2, data: [['a', 'a'], ['0', '0']] },
   ]);
-  const [expr, setExpr] = useState('A * B * A * A');
+  const [expr, setExpr] = useState(null as string | null);
   const [result, setResult] = useState<EvalResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -239,7 +239,7 @@ export default function Page() {
 
         <section className="bg-white rounded-lg shadow p-3">
           <div className="font-semibold mb-2">Operations</div>
-          <input className="w-full border rounded px-3 py-2 mb-2" value={expr} onChange={e => setExpr(e.target.value)} placeholder="e.g. A * B + T(A)" />
+          <input className="w-full border rounded px-3 py-2 mb-2" value={expr} onChange={e => setExpr(e.target.value)} placeholder="e.g. (2/3) * A * B + T(A)" />
           <div className="flex flex-wrap gap-2 mb-2">
             {varButtons.map(v => (
               <button key={v} className="bg-[#4ca1af] text-white rounded px-2 py-1" onClick={() => insertToken(v)}>{v}</button>
