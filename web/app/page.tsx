@@ -15,6 +15,9 @@ export default function Page() {
   const [result, setResult] = useState<EvalResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Add local state for editing row/col values
+  const [editSizes, setEditSizes] = useState<Record<string, {rows: string, cols: string}>>({});
+
   const varButtons = useMemo(() => matrices.map(m => m.name), [matrices]);
 
   const formatExpr = (s: string): string => {
@@ -216,9 +219,53 @@ export default function Page() {
                   <div className="font-semibold">Matrix {m.name}</div>
                   <div className="flex items-center gap-2">
                     <span>Rows:</span>
-                    <input type="number" className="border rounded px-2 py-1 w-16" value={m.rows} onChange={e => setSize(m.name, parseInt(e.target.value || '1', 10), m.cols)} />
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="border rounded px-2 py-1 w-20"
+                      value={editSizes[m.name]?.rows ?? String(m.rows)}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setEditSizes(s => ({
+                          ...s,
+                          [m.name]: { rows: v, cols: s[m.name]?.cols ?? String(m.cols) }
+                        }));
+                      }}
+                      onBlur={e => {
+                        let v = parseInt(e.target.value, 10);
+                        if (!v || v < 1) v = 1;
+                        setSize(m.name, v, m.cols);
+                        setEditSizes(s => {
+                          const { [m.name]: omit, ...rest } = s;
+                          return rest;
+                        });
+                      }}
+                    />
                     <span>Cols:</span>
-                    <input type="number" className="border rounded px-2 py-1 w-16" value={m.cols} onChange={e => setSize(m.name, m.rows, parseInt(e.target.value || '1', 10))} />
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="border rounded px-2 py-1 w-20"
+                      value={editSizes[m.name]?.cols ?? String(m.cols)}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setEditSizes(s => ({
+                          ...s,
+                          [m.name]: { cols: v, rows: s[m.name]?.rows ?? String(m.rows) }
+                        }));
+                      }}
+                      onBlur={e => {
+                        let v = parseInt(e.target.value, 10);
+                        if (!v || v < 1) v = 1;
+                        setSize(m.name, m.rows, v);
+                        setEditSizes(s => {
+                          const { [m.name]: omit, ...rest } = s;
+                          return rest;
+                        });
+                      }}
+                    />
                     <button className="bg-red-100 text-red-700 px-2 py-1 rounded" onClick={() => removeMatrix(m.name)}>×</button>
                   </div>
                 </div>
