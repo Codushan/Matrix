@@ -259,7 +259,7 @@ export default function Page() {
               ['-', '-'],
               ['*', '*'],
               ['Trans(T)', 'T('],
-              ['Inv(I)', 'INV('],
+              ['INV(I)', 'INV('],
               ['Det(|D|)', 'DET('],
               ['Trace', 'TRACE('],
               ['Rank', 'RANK('],
