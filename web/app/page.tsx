@@ -11,7 +11,7 @@ export default function Page() {
     { name: 'A', rows: 2, cols: 2, data: [['a', '0'], ['0', 'a']] },
     { name: 'B', rows: 2, cols: 2, data: [['a', 'a'], ['0', '0']] },
   ]);
-  const [expr, setExpr] = useState(null as string | null);
+  const [expr, setExpr] = useState(''); // was: useState(null as string | null);
   const [result, setResult] = useState<EvalResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
