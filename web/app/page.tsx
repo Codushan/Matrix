@@ -16,124 +16,107 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
 
   // Add local state for editing row/col values
-  const [editSizes, setEditSizes] = useState<Record<string, {rows: string, cols: string}>>({});
+  const [editSizes, setEditSizes] = useState<Record<string, { rows: string, cols: string }>>({});
 
   const varButtons = useMemo(() => matrices.map(m => m.name), [matrices]);
 
   const formatExpr = (s: string): string => {
     if (!s) return s;
     let t = s;
-    
+
     // Handle fractions: a/b -> a/b with proper formatting
-    t = t.replace(/(\w+)\/(\w+)/g, '($1)/($2)');
-    
+    // t = t.replace(/(\w+)\/(\w+)/g, '($1)/($2)');
+
     // Handle powers: a**b -> a^b
     t = t.replace(/\*\*/g, '^');
-    
+
     // Handle implicit multiplication: 2a -> 2·a, 2(a+b) -> 2·(a+b)
     t = t.replace(/(\d+)([a-zA-Z(])/g, '$1·$2');
-    
+
     // Handle negative signs: -a -> −a (proper minus sign)
     t = t.replace(/-/g, '−');
-    
+
     // Handle multiplication: a*b -> a·b
     t = t.replace(/\*/g, '·');
-    
+
     // Handle common mathematical expressions
     t = t.replace(/\bexp\b/g, 'e^');
     t = t.replace(/\bln\b/g, 'ln');
     t = t.replace(/\bsin\b/g, 'sin');
     t = t.replace(/\bcos\b/g, 'cos');
     t = t.replace(/\btan\b/g, 'tan');
-    
+
     // Add proper spacing around operators for better readability
     t = t.replace(/([+\-])/g, ' $1 ');
     t = t.replace(/\s+/g, ' ').trim();
-    
+
     // Handle powers with proper spacing: a^2 -> a^2 (no extra spaces)
     t = t.replace(/(\w+)\s*\^\s*(\w+)/g, '$1^$2');
-    
+
     // Handle multiplication dots with proper spacing
     t = t.replace(/(\w+)\s*·\s*(\w+)/g, '$1·$2');
-    
+
     return t;
   };
 
   // Function to render mathematical expressions with proper formatting
-  const renderMathExpr = (expr: string) => {
+  const renderMathExpr = (expr: string): React.ReactNode => {
     const formatted = formatExpr(expr);
-    
-    // Check if it's a fraction
-    if (formatted.includes('/')) {
-      const [numerator, denominator] = formatted.split('/');
+
+    // Only render as a fraction if the whole expr is a single top-level fraction
+    // e.g. "a/2", "(a+b)/2", "a/(b+c)", but NOT "a/2 + b/2"
+    // This regex matches: [anything]/[anything] with nothing else outside
+    const fracMatch = formatted.match(/^\(?(.+)\)?\/\(?(.+)\)?$/);
+    if (
+      fracMatch &&
+      // Only if there's a single "/" at the top level (not inside parentheses)
+      (() => {
+        let depth = 0, slashCount = 0;
+        for (let ch of formatted) {
+          if (ch === '(') depth++;
+          if (ch === ')') depth--;
+          if (ch === '/' && depth === 0) slashCount++;
+        }
+        return slashCount === 1;
+      })()
+    ) {
       return (
         <div className="flex flex-col items-center">
-          <div className="border-b border-gray-400 px-2">{renderMathExpr(numerator)}</div>
-          <div className="px-2">{renderMathExpr(denominator)}</div>
+          <div className="border-b border-gray-400 px-2">{renderMathExpr(fracMatch[1])}</div>
+          <div className="px-2">{renderMathExpr(fracMatch[2])}</div>
         </div>
       );
     }
-    
-    // Check if it contains powers (handle multiple powers in the same expression)
+
+    // Handle powers (a^2)
     if (formatted.includes('^')) {
-      // Split by + and - to handle multiple terms
       const terms = formatted.split(/([+\-])/);
       return terms.map((term, index) => {
         if (term === '+' || term === '-') {
           return <span key={index} className="mx-1">{term}</span>;
         }
-        
-        // Check if this term contains powers
         if (term.includes('^')) {
-          const powerParts = term.split('^');
-          if (powerParts.length === 2) {
-            return (
-              <span key={index}>
-                {powerParts[0]}<sup className="text-sm">{powerParts[1]}</sup>
-              </span>
-            );
-          }
+          const [base, exp] = term.split('^');
+          return (
+            <span key={index}>
+              {base}<sup className="text-sm">{exp}</sup>
+            </span>
+          );
         }
-        
         return <span key={index}>{term}</span>;
       });
     }
-    
-    // Check if it contains multiplication dots
+
+    // Handle multiplication dots
     if (formatted.includes('·')) {
-      return formatted.split('·').map((part, i) => (
+      return formatted.split('·').map((part, i, arr) => (
         <span key={i}>
-          {part}{i < formatted.split('·').length - 1 && <span className="text-gray-500">·</span>}
+          {part}{i < arr.length - 1 && <span className="text-gray-500">·</span>}
         </span>
       ));
     }
-    
-    // Handle expressions with parentheses and multiple terms
-    if (formatted.includes('(') || formatted.includes('+') || formatted.includes('−')) {
-      // Split by operators while preserving them
-      const parts = formatted.split(/([+\-·])/);
-      return parts.map((part, index) => {
-        if (part === '+' || part === '−' || part === '·') {
-          return <span key={index} className="mx-1">{part}</span>;
-        }
-        
-        // Check if this part contains powers
-        if (part.includes('^')) {
-          const powerParts = part.split('^');
-          if (powerParts.length === 2) {
-            return (
-              <span key={index}>
-                {powerParts[0]}<sup className="text-sm">{powerParts[1]}</sup>
-              </span>
-            );
-          }
-        }
-        
-        return <span key={index}>{part}</span>;
-      });
-    }
-    
-    // Default case
+
+    // Default: just render the formatted string
     return formatted;
   };
 
@@ -178,7 +161,7 @@ export default function Page() {
     setError(null);
     setResult(null);
     try {
-             const res = await fetch(`${process.env.API_URL || 'http://localhost:8000'}/evaluate`, {
+      const res = await fetch(`${process.env.API_URL || 'http://localhost:8000'}/evaluate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ matrices, expression: expr })
@@ -308,7 +291,8 @@ export default function Page() {
             {varButtons.map(v => (
               <button key={v} className="bg-[#4ca1af] text-white rounded px-2 py-1" onClick={() => insertToken(v)}>{v}</button>
             ))}
-            {[1,2,3,4,5,6,7,8,9,0].map(n => (
+            {/* Number and fraction buttons */}
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(n => (
               <button key={n} className="bg-gray-200 text-gray-800 rounded px-2 py-1" onClick={() => insertToken(String(n))}>{n}</button>
             ))}
             <button className="bg-gray-200 text-gray-800 rounded px-2 py-1" onClick={() => insertToken('/')}>/</button>
@@ -327,19 +311,38 @@ export default function Page() {
               ['Trace', 'TRACE('],
               ['Rank', 'RANK('],
               ['RREF', 'RREF(']
-            ].map(([label, tok]) => (
-              <button key={label} className="bg-[#2c3e50] text-white rounded px-2 py-2" onClick={() => insertToken(tok as string)}>{label}</button>
-            ))}
+            ].map(([label, tok]) => {
+              // Use symbols for mobile
+              let symbol = label;
+              if (label === 'Trans(T)') symbol = 'T';
+              if (label === 'INV(I)') symbol = 'A⁻¹';
+              if (label === 'Det(|D|)') symbol = '|A|';
+              if (label === 'Trace') symbol = 'tr';
+              if (label === 'Rank') symbol = 'rk';
+              if (label === 'RREF') symbol = 'rref';
+              return (
+                <button
+                  key={label}
+                  className="bg-[#2c3e50] text-white rounded px-2 py-2"
+                  onClick={() => insertToken(tok as string)}
+                >
+                  <span className="block sm:hidden">{symbol}</span>
+                  <span className="hidden sm:block">{label}</span>
+                </button>
+              );
+            })}
           </div>
           <div className="grid grid-cols-4 gap-2 mt-2">
-            <button className="bg-green-600 text-white rounded px-3 py-2 font-semibold" onClick={evaluate}>Calculate</button>
+            <button className="bg-green-600 text-white rounded px-3 py-2 font-semibold" onClick={evaluate}>
+              <span className="block sm:hidden">=</span>
+              <span className="hidden sm:block">Calculate</span>
+            </button>
             <button className="bg-[#007aff] text-white rounded px-3 py-2 font-semibold" onClick={storeResult}>Store Result</button>
             <button className="bg-red-600 text-white rounded px-3 py-2 font-semibold" onClick={() => { setExpr(''); setResult(null); setError(null); }}>Clear</button>
             <button
-              className="bg-purple-900 text-white rounded px-3 py-2 font-semibold"
+              className="bg-purple-900 text-white rounded px-2 py-1"
               onClick={() => setExpr(s => s.slice(0, -1))}
               aria-label="Backspace"
-              title="Backspace"
             >
               ⌫
             </button>
@@ -352,35 +355,17 @@ export default function Page() {
               <div><strong>Scalar:</strong> {renderMathExpr(String(result.value))}</div>
             )}
             {!error && result?.kind === 'matrix' && Array.isArray(result.value) && (
-              <div style={{ overflowX: 'auto', width: '100%' }}>
-                <table className="border-collapse" style={{ minWidth: '100%', tableLayout: 'auto' }}>
-                  <tbody>
-                    {(result.value as string[][]).map((row, i) => (
-                      <tr
-                        key={i}
-                        className={i % 2 === 1 ? 'bg-[#e6d3c2]' : ''}
-                      >
-                        {row.map((cell, j) => (
-                          <td
-                            key={j}
-                            className="border px-1 py-1 text-center align-top"
-                            style={{
-                              minWidth: 60,
-                              maxWidth: 120,
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}
-                            title={cell}
-                          >
-                            {renderMathExpr(cell)}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <table className="border-collapse">
+                <tbody>
+                  {(result.value as string[][]).map((row, i) => (
+                    <tr key={i}>
+                      {row.map((cell, j) => (
+                        <td key={j} className="border px-2 py-1 text-center">{renderMathExpr(cell)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </section>
