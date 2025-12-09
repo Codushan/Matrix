@@ -56,14 +56,6 @@ def build_symbolic_matrix(data: List[List[str]]) -> Matrix:
     return Matrix(rows, cols, flat)
 
 
-def to_list_of_str(m: Matrix, simplify: bool = False) -> List[List[str]]:
-    # Only simplify if requested, otherwise use doit() which is faster for basic operations
-    def process(val):
-        if simplify:
-            return latex(sp_simplify(val))
-        return latex(val.doit())
-        
-    return [[process(m[r, c]) for c in range(m.shape[1])] for r in range(m.shape[0])]
 
 
 def tokenize(expr: str):
@@ -182,6 +174,16 @@ def to_rpn(tokens):
     return out
 
 
+def format_matrix_result(m: Matrix, simplify: bool = False) -> List[List[str]]:
+    # Only simplify if requested, otherwise use doit() which is faster for basic operations
+    def process(val):
+        if simplify:
+            return latex(sp_simplify(val))
+        return latex(val.doit())
+        
+    return [[process(m[r, c]) for c in range(m.shape[1])] for r in range(m.shape[0])]
+
+
 def eval_rpn(rpn, matrices_map: dict, simplify: bool = False) -> EvalResponse:
     stack = []
     for t in rpn:
@@ -270,7 +272,7 @@ def eval_rpn(rpn, matrices_map: dict, simplify: bool = False) -> EvalResponse:
         raise ValueError("Invalid expression format. Use formats like: A + B, T(A), INV(A), DET(A)")
     kind, val = stack[0]
     if kind == "matrix":
-        return EvalResponse(kind="matrix", value=to_list_of_str(val, simplify))
+        return EvalResponse(kind="matrix", value=format_matrix_result(val, simplify))
     
     # Final scalar result
     final_val = parse_expr(str(val), transformations=TRANSFORMS) # ensure it is sympy object
