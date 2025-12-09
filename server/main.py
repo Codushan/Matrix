@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Literal, Union
-from sympy import Matrix, symbols, simplify as sp_simplify
+from sympy import Matrix, symbols, simplify as sp_simplify, latex
 from sympy.parsing.sympy_parser import (
     parse_expr,
     standard_transformations,
@@ -24,6 +24,7 @@ class MatrixPayload(BaseModel):
 class EvalRequest(BaseModel):
     matrices: List[MatrixPayload]
     expression: str
+    simplify_result: bool = False  # Add option to simplify
 
 
 class EvalResponse(BaseModel):
@@ -55,8 +56,14 @@ def build_symbolic_matrix(data: List[List[str]]) -> Matrix:
     return Matrix(rows, cols, flat)
 
 
-def to_list_of_str(m: Matrix) -> List[List[str]]:
-    return [[str(sp_simplify(m[r, c])) for c in range(m.shape[1])] for r in range(m.shape[0])]
+def to_list_of_str(m: Matrix, simplify: bool = False) -> List[List[str]]:
+    # Only simplify if requested, otherwise use doit() which is faster for basic operations
+    def process(val):
+        if simplify:
+            return latex(sp_simplify(val))
+        return latex(val.doit())
+        
+    return [[process(m[r, c]) for c in range(m.shape[1])] for r in range(m.shape[0])]
 
 
 def tokenize(expr: str):
@@ -65,13 +72,16 @@ def tokenize(expr: str):
     letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     ops = "+-*/()"
     digits = "0123456789"
+    
+    # First pass: raw tokenization
+    raw_tokens = []
     while i < len(expr):
         ch = expr[i]
         if ch.isspace():
             i += 1
             continue
         if ch in ops:
-            tokens.append({"type": ch, "value": ch})
+            raw_tokens.append({"type": ch, "value": ch})
             i += 1
             continue
         if ch in digits or (ch == '.' and i + 1 < len(expr) and expr[i + 1] in digits):
@@ -84,7 +94,7 @@ def tokenize(expr: str):
                         raise ValueError("Invalid number format")
                 j += 1
             num = expr[i:j]
-            tokens.append({"type": "NUMBER", "value": num})
+            raw_tokens.append({"type": "NUMBER", "value": num})
             i = j
             continue
         if ch in letters:
@@ -92,10 +102,46 @@ def tokenize(expr: str):
             while j < len(expr) and expr[j] in letters:
                 j += 1
             word = expr[i:j].upper()
-            tokens.append({"type": "WORD", "value": word})
+            raw_tokens.append({"type": "WORD", "value": word})
             i = j
             continue
         raise ValueError(f"Unexpected character: {ch}")
+
+    # Second pass: insert implicit multiplication
+    if not raw_tokens:
+        return []
+        
+    tokens.append(raw_tokens[0])
+    for k in range(1, len(raw_tokens)):
+        prev = raw_tokens[k-1]
+        curr = raw_tokens[k]
+        
+        # Rule: Insert * if:
+        # 1. NUMBER followed by WORD or (
+        # 2. ) followed by WORD or ( or NUMBER
+        # 3. WORD (variable) followed by WORD or ( or NUMBER?
+        #    Careful with functions like T(...). WORD followed by ( is function call IF WORD is function.
+        #    If WORD is variable, it might be A(B)?
+        
+        insert_mult = False
+        if prev["type"] == "NUMBER":
+            if curr["type"] in ["WORD", "("]:
+                insert_mult = True
+        elif prev["type"] == ")":
+            if curr["type"] in ["WORD", "(", "NUMBER"]:
+                insert_mult = True
+        elif prev["type"] == "WORD":
+             # If prev is NOT a function (T, INV...), and followed by something, maybe?
+             # But our RPN parser treats WORD as function only if in specific set.
+             # Checking against "funcs" set here would be good but it's defined in to_rpn.
+             # Let's be conservative. The user case is `(2/3)A` -> `)` followed by `WORD`.
+             pass
+
+        if insert_mult:
+            tokens.append({"type": "*", "value": "*"})
+        
+        tokens.append(curr)
+        
     return tokens
 
 
@@ -136,7 +182,7 @@ def to_rpn(tokens):
     return out
 
 
-def eval_rpn(rpn, matrices_map: dict) -> EvalResponse:
+def eval_rpn(rpn, matrices_map: dict, simplify: bool = False) -> EvalResponse:
     stack = []
     for t in rpn:
         tt = t["type"]
@@ -155,9 +201,15 @@ def eval_rpn(rpn, matrices_map: dict) -> EvalResponse:
             elif t["value"] == "INV":
                 stack.append(("matrix", a.inv()))
             elif t["value"] == "DET":
-                stack.append(("scalar", str(sp_simplify(a.det()))))
+                val = a.det()
+                if simplify:
+                    val = sp_simplify(val)
+                stack.append(("scalar", str(val)))
             elif t["value"] == "TRACE":
-                stack.append(("scalar", str(sp_simplify(a.trace()))))
+                val = a.trace()
+                if simplify:
+                    val = sp_simplify(val)
+                stack.append(("scalar", str(val)))
             elif t["value"] == "RANK":
                 stack.append(("scalar", str(int(a.rank()))))
             elif t["value"] == "RREF":
@@ -184,14 +236,22 @@ def eval_rpn(rpn, matrices_map: dict) -> EvalResponse:
                 continue
             # scalar-scalar
             if a_kind == "scalar" and b_kind == "scalar":
+                # For scalars, we might want to keep them as strings until the end or parse them
+                # But here we stick to strings -> sympy -> string
+                val_a = parse_expr(str(a), transformations=TRANSFORMS)
+                val_b = parse_expr(str(b), transformations=TRANSFORMS)
                 if tt == "+":
-                    stack.append(("scalar", str(parse_expr(str(a), transformations=TRANSFORMS) + parse_expr(str(b), transformations=TRANSFORMS))))
+                    res = val_a + val_b
                 elif tt == "-":
-                    stack.append(("scalar", str(parse_expr(str(a), transformations=TRANSFORMS) - parse_expr(str(b), transformations=TRANSFORMS))))
+                    res = val_a - val_b
                 elif tt == "*":
-                    stack.append(("scalar", str(parse_expr(str(a), transformations=TRANSFORMS) * parse_expr(str(b), transformations=TRANSFORMS))))
+                    res = val_a * val_b
                 elif tt == "/":
-                    stack.append(("scalar", str(parse_expr(str(a), transformations=TRANSFORMS) / parse_expr(str(b), transformations=TRANSFORMS))))
+                    res = val_a / val_b
+                
+                if simplify:
+                    res = sp_simplify(res)
+                stack.append(("scalar", str(res)))
                 continue
             # matrix-matrix operations
             if a_kind != "matrix" or b_kind != "matrix":
@@ -210,8 +270,16 @@ def eval_rpn(rpn, matrices_map: dict) -> EvalResponse:
         raise ValueError("Invalid expression format. Use formats like: A + B, T(A), INV(A), DET(A)")
     kind, val = stack[0]
     if kind == "matrix":
-        return EvalResponse(kind="matrix", value=to_list_of_str(val))
-    return EvalResponse(kind="scalar", value=str(sp_simplify(val)))
+        return EvalResponse(kind="matrix", value=to_list_of_str(val, simplify))
+    
+    # Final scalar result
+    final_val = parse_expr(str(val), transformations=TRANSFORMS) # ensure it is sympy object
+    if simplify:
+        final_val = sp_simplify(final_val)
+    else:
+        final_val = final_val.doit()
+        
+    return EvalResponse(kind="scalar", value=latex(final_val))
 
 
 @app.post("/evaluate", response_model=EvalResponse)
@@ -222,7 +290,7 @@ def evaluate(req: EvalRequest):
             sym_m = build_symbolic_matrix(m.data)
             matrices_map[m.name.upper()] = sym_m
         rpn = to_rpn(tokenize(req.expression))
-        return eval_rpn(rpn, matrices_map)
+        return eval_rpn(rpn, matrices_map, req.simplify_result)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

@@ -6,6 +6,9 @@ import clsx from 'clsx';
 type Matrix = { name: string; rows: number; cols: number; data: string[][] };
 type EvalResponse = { kind: 'matrix' | 'scalar'; value: string | string[][] };
 
+import 'katex/dist/katex.min.css';
+import Latex from 'react-latex-next';
+
 export default function Page() {
   const [matrices, setMatrices] = useState<Matrix[]>([
     { name: 'A', rows: 2, cols: 2, data: [['a', '0'], ['0', 'a']] },
@@ -20,111 +23,24 @@ export default function Page() {
 
   const varButtons = useMemo(() => matrices.map(m => m.name), [matrices]);
 
-  const formatExpr = (s: string): string => {
-    if (!s) return s;
-    let t = s;
 
-    // Handle fractions: a/b -> a/b with proper formatting
-    // t = t.replace(/(\w+)\/(\w+)/g, '($1)/($2)');
+  // Function to render mathematical result
+  const renderResult = (content: string) => {
+    // If it's a simple string, we can stick it in Latex
+    // We expect the backend to give us LaTeX-friendly strings.
+    // Replace any remaining Python-isms if necessary, but ideally backend handles it.
+    let latexStr = content;
+    // Basic cleanups just in case
+    latexStr = latexStr.replace(/\*/g, ' \\cdot ');
 
-    // Handle powers: a**b -> a^b
-    t = t.replace(/\*\*/g, '^');
-
-    // Handle implicit multiplication: 2a -> 2·a, 2(a+b) -> 2·(a+b)
-    t = t.replace(/(\d+)([a-zA-Z(])/g, '$1·$2');
-
-    // Handle negative signs: -a -> −a (proper minus sign)
-    t = t.replace(/-/g, '−');
-
-    // Handle multiplication: a*b -> a·b
-    t = t.replace(/\*/g, '·');
-
-    // Handle common mathematical expressions
-    t = t.replace(/\bexp\b/g, 'e^');
-    t = t.replace(/\bln\b/g, 'ln');
-    t = t.replace(/\bsin\b/g, 'sin');
-    t = t.replace(/\bcos\b/g, 'cos');
-    t = t.replace(/\btan\b/g, 'tan');
-
-    // Add proper spacing around operators for better readability
-    t = t.replace(/([+\-])/g, ' $1 ');
-    t = t.replace(/\s+/g, ' ').trim();
-
-    // Handle powers with proper spacing: a^2 -> a^2 (no extra spaces)
-    t = t.replace(/(\w+)\s*\^\s*(\w+)/g, '$1^$2');
-
-    // Handle multiplication dots with proper spacing
-    t = t.replace(/(\w+)\s*·\s*(\w+)/g, '$1·$2');
-
-    return t;
-  };
-
-  // Function to render mathematical expressions with proper formatting
-  const renderMathExpr = (expr: string): React.ReactNode => {
-    const formatted = formatExpr(expr);
-
-    // Only render as a fraction if the whole expr is a single top-level fraction
-    // e.g. "a/2", "(a+b)/2", "a/(b+c)", but NOT "a/2 + b/2"
-    // This regex matches: [anything]/[anything] with nothing else outside
-    const fracMatch = formatted.match(/^\(?(.+)\)?\/\(?(.+)\)?$/);
-    if (
-      fracMatch &&
-      // Only if there's a single "/" at the top level (not inside parentheses)
-      (() => {
-        let depth = 0, slashCount = 0;
-        for (let ch of formatted) {
-          if (ch === '(') depth++;
-          if (ch === ')') depth--;
-          if (ch === '/' && depth === 0) slashCount++;
-        }
-        return slashCount === 1;
-      })()
-    ) {
-      return (
-        <div className="flex flex-col items-center">
-          <div className="border-b border-gray-400 px-2">{renderMathExpr(fracMatch[1])}</div>
-          <div className="px-2">{renderMathExpr(fracMatch[2])}</div>
-        </div>
-      );
-    }
-
-    // Handle powers (a^2)
-    if (formatted.includes('^')) {
-      const terms = formatted.split(/([+\-])/);
-      return terms.map((term, index) => {
-        if (term === '+' || term === '-') {
-          return <span key={index} className="mx-1">{term}</span>;
-        }
-        if (term.includes('^')) {
-          const [base, exp] = term.split('^');
-          return (
-            <span key={index}>
-              {base}<sup className="text-sm">{exp}</sup>
-            </span>
-          );
-        }
-        return <span key={index}>{term}</span>;
-      });
-    }
-
-    // Handle multiplication dots
-    if (formatted.includes('·')) {
-      return formatted.split('·').map((part, i, arr) => (
-        <span key={i}>
-          {part}{i < arr.length - 1 && <span className="text-gray-500">·</span>}
-        </span>
-      ));
-    }
-
-    // Default: just render the formatted string
-    return formatted;
+    return <Latex>{`$${latexStr}$`}</Latex>;
   };
 
   const setSize = (name: string, rows: number, cols: number) => {
     setMatrices(prev => prev.map(m => {
       if (m.name !== name) return m;
-      const r = Math.max(1, Math.floor(rows)); // Remove the 8 limit
-      const c = Math.max(1, Math.floor(cols)); // Remove the 8 limit
+      const r = Math.max(1, Math.floor(rows));
+      const c = Math.max(1, Math.floor(cols));
       const data: string[][] = Array.from({ length: r }, (_, i) => (
         Array.from({ length: c }, (_, j) => (m.data[i]?.[j] ?? ''))
       ));
@@ -352,20 +268,33 @@ export default function Page() {
           <div className="min-h-[140px] border rounded p-2 bg-slate-50 overflow-auto">
             {error && (<pre className="text-red-700 whitespace-pre-wrap">Error: {error}</pre>)}
             {!error && result?.kind === 'scalar' && (
-              <div><strong>Scalar:</strong> {renderMathExpr(String(result.value))}</div>
+              <div className="text-lg p-2">
+                <strong>Result: </strong>
+                {renderResult(String(result.value))}
+              </div>
             )}
             {!error && result?.kind === 'matrix' && Array.isArray(result.value) && (
-              <table className="border-collapse">
-                <tbody>
-                  {(result.value as string[][]).map((row, i) => (
-                    <tr key={i}>
-                      {row.map((cell, j) => (
-                        <td key={j} className="border px-2 py-1 text-center">{renderMathExpr(cell)}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="flex justify-center">
+                {/* 
+                    We can render the whole matrix as one LaTeX block for better formatting 
+                    Or keep the table structure. 
+                    Let's use the table structure for consistency with input, 
+                    but render each cell with LaTeX.
+                 */}
+                <table className="border-collapse">
+                  <tbody>
+                    {(result.value as string[][]).map((row, i) => (
+                      <tr key={i}>
+                        {row.map((cell, j) => (
+                          <td key={j} className="border px-4 py-2 text-center text-lg">
+                            {renderResult(cell)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </section>
