@@ -85,8 +85,13 @@ export default function Page() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ matrices, expression: expr })
       });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Server error (${res.status}): ${text.slice(0, 200)}`); // Limit error length
+      }
+
       const json = await res.json();
-      if (!res.ok) throw new Error(json.detail || 'Error');
       setResult(json);
     } catch (e: any) {
       setError(String(e.message || e));
