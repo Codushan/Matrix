@@ -77,7 +77,10 @@ export default function Page() {
     setError(null);
     setResult(null);
     try {
-      const res = await fetch(`${process.env.API_URL || 'http://localhost:8000'}/evaluate`, {
+      // Use relative path in production (Vercel rewrites) or explicit localhost for dev
+      const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || (isLocal ? 'http://localhost:8000' : '');
+      const res = await fetch(`${apiUrl}/evaluate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ matrices, expression: expr })
